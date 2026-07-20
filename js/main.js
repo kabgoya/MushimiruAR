@@ -25,10 +25,12 @@ const COOLDOWN_TIME = 1.5;   // 次の魔法陣が出るまでの休けい秒数
 const LOST_GRACE = 0.7;      // 魔法陣の途中で手を見失ったときに待つ秒数
 const RIDE_LOST_GRACE = 3.0; // 昆虫が乗っているときは長めに待つ(カメラを近づけると
                              // 手の検出が途切れやすいので、すぐ消えないようにする)
-const SHAKE_SPEED = 0.8;       // 「振った!」と判定するスピード(1秒に手のひら何個ぶん動いたか)
+const SHAKE_SPEED = 4;       // 「振った!」と判定するスピード(1秒に手のひら何個ぶん動いたか)
                              // ※画面上の速さではなく手の実際の速さで測るので、
                              //   カメラに手を近づけても誤判定しない
-const SHAKE_FRAMES = 4;      // 速い動きが何フレーム続いたら「振った」とするか
+const SHAKE_FRAMES = 2;      // 速い動きが何フレーム続いたら「振った」とするか
+const SHAKE_LOST_TIME = 0.4; // 速い動きの直後にこの秒数以内に手を見失ったら
+                             // 「勢いよく振って手が画面から出た」= 振ったと判定する
 const PALM_REAL_SIZE_M = 0.09; // 手のひら(手首〜中指のつけ根)の実寸のめやす: 9cm
                                // 昆虫を実寸表示するための「定規」として使う
 // ----------------------------------------------------
@@ -65,6 +67,20 @@ let lastFrameTime = 0;     // 前のフレームの時刻(dt 計算用)
 let palmHistory = [];      // { x, y, t } の配列(x, y は画面の横幅を1とした割合)
 let fastMoveCount = 0;     // 速い動きが連続した回数
 let palmWidthFrac = 0.2;   // 手のひらの大きさ(画面の横幅を1とした割合)。振り判定に使う
+let lastShakeSpeed = 0;    // 最後に測った手のスピード(デバッグ表示用)
+
+// ---- デバッグ表示 ----
+// アドレスの最後に「?debug」を付けて開くと(例 : .../index.html?debug)、
+// 手のスピードの数値が画面に表示される。SHAKE_SPEED の調整に使う
+let debugPanel = null;
+if (new URLSearchParams(location.search).has("debug")) {
+  debugPanel = document.createElement("div");
+  debugPanel.style.cssText =
+    "position:fixed; top:60px; left:12px; z-index:50; color:#0f0;" +
+    "background:rgba(0,0,0,0.6); padding:8px 12px; border-radius:8px;" +
+    "font-size:14px; font-family:monospace; white-space:pre;";
+  document.body.appendChild(debugPanel);
+}
 
 /** 状態を切り替える */
 function setState(next) {
@@ -276,6 +292,7 @@ function checkShake(px, py, now) {
 
   // 手のひらの大きさで割って「手のひら何個ぶん/秒」に変換する
   const speed = screenSpeed / Math.max(palmWidthFrac, 0.01);
+  lastShakeSpeed = speed;   // デバッグ表示用に記録
 
   // 速い動きが連続しているかを数える
   if (speed > SHAKE_SPEED) {
@@ -300,6 +317,15 @@ function getThrowVelocity() {
   const v = new THREE.Vector3(vx, vy + 1.5, -4.0);   // 少し上+奥へ飛ばす
   v.clampLength(3, 7);                                // 速すぎ・遅すぎを防ぐ
   return v;
+}
+
+/** 昆虫を投げ飛ばす(アニメーション開始+効果音) */
+function doThrow() {
+  arScene.startThrow(getThrowVelocity());
+  // 効果音を最初から鳴らす
+  throwSound.currentTime = 0;
+  throwSound.play().catch(() => { /* 音が鳴らせなくても続行 */ });
+  setState("thrown");
 }
 
 // ================================================================
@@ -395,12 +421,14 @@ function mainLoop(now) {
       if (hand.found) {
         // 手を振ったかチェック(サプライズ機能!)
         if (checkShake(palmScreenX, palmScreenY, now)) {
-          arScene.startThrow(getThrowVelocity());
-          // 効果音を最初から鳴らす
-          throwSound.currentTime = 0;
-          throwSound.play().catch(() => { /* 音が鳴らせなくても続行 */ });
-          setState("thrown");
+          doThrow();
         }
+      } else if (fastMoveCount >= 1 && lostTime < SHAKE_LOST_TIME) {
+        // 速い動きの直後に手を見失った!
+        // = 勢いよく振って手がカメラの画面から飛び出したということ。
+        // 本気で振ると手はブレて検出できなくなるので、これも「振った」と判定する
+        fastMoveCount = 0;
+        doThrow();
       } else if (lostTime > RIDE_LOST_GRACE) {
         // 手を長いあいだ見失った → 昆虫はしゅーっと消える
         // (カメラを手に近づけると検出が一瞬途切れることがあるので、
@@ -434,6 +462,14 @@ function mainLoop(now) {
         setState("waiting");
       }
       break;
+  }
+
+  // --- デバッグ表示(アドレスに ?debug を付けたときだけ) ---
+  if (debugPanel) {
+    debugPanel.textContent =
+      `じょうたい: ${state}\n` +
+      `はやさ: ${lastShakeSpeed.toFixed(1)} てのひら/秒 (しきい値 ${SHAKE_SPEED})\n` +
+      `手のけんしゅつ: ${hand.found ? "○" : "×"}  速い動き連続: ${fastMoveCount}`;
   }
 
   // --- 4. 3Dを画面に描いて、次のフレームを予約する ---
