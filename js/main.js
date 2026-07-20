@@ -25,6 +25,8 @@ const COOLDOWN_TIME = 1.5;   // 次の魔法陣が出るまでの休けい秒数
 const LOST_GRACE = 0.7;      // 手を見失っても待ってあげる秒数(一瞬の見失い対策)
 const SHAKE_SPEED = 1.6;     // 「振った!」と判定するスピード(画面の横幅/秒)
 const SHAKE_FRAMES = 4;      // 速い動きが何フレーム続いたら「振った」とするか
+const PALM_REAL_SIZE_M = 0.09; // 手のひら(手首〜中指のつけ根)の実寸のめやす: 9cm
+                               // 昆虫を実寸表示するための「定規」として使う
 // ----------------------------------------------------
 
 // ---- HTML の部品を取得する ----
@@ -41,6 +43,10 @@ const cameraToggle = document.getElementById("camera-toggle-checkbox");
 const cam = new CameraManager(video);
 const tracker = new HandTracker();
 const arScene = new ARScene(canvas);
+
+// ---- 効果音 : 昆虫を投げ飛ばしたときに鳴らす音 ----
+const throwSound = new Audio("sounds/throw.mp3");
+throwSound.preload = "auto";   // あらかじめ読み込んでおく(鳴らすとき待たされない)
 
 // ---- 状態を管理する変数 ----
 let state = "waiting";     // いまの状態
@@ -79,6 +85,13 @@ startButton.addEventListener("click", async () => {
 
   introModal.style.display = "none";   // 説明ウィンドウを閉じる
   loadingOverlay.hidden = false;       // 「じゅんびちゅう…」を表示
+
+  // スマホは「ユーザーがタップした直後」しか音を出す許可がもらえないため、
+  // このボタンが押されたタイミングで一度だけ無音再生して、音を出せる状態にしておく
+  throwSound.play().then(() => {
+    throwSound.pause();
+    throwSound.currentTime = 0;
+  }).catch(() => { /* 音が使えなくてもアプリは動かす */ });
 
   try {
     // カメラ・手の検出・昆虫モデルを同時に準備する(並行して待つと速い)
@@ -126,7 +139,7 @@ function videoToScreen(nx, ny) {
   const vh = video.videoHeight;
   const W = window.innerWidth;
   const H = window.innerHeight;
-  if (vw === 0 || vh === 0) return { sx: W / 2, sy: H / 2 };
+  if (vw === 0 || vh === 0) return { sx: W / 2, sy: H / 2, dh: H };
 
   // 映像を画面いっぱいに広げたときの拡大率(大きい方に合わせる)
   const scale = Math.max(W / vw, H / vh);
@@ -141,7 +154,8 @@ function videoToScreen(nx, ny) {
   // インカメラのときは映像を左右反転して表示しているので、位置も反転する
   if (cam.isMirrored) sx = W - sx;
 
-  return { sx, sy };
+  // dh(拡大後の映像の縦幅)は、手の大きさをピクセルに換算するのに使う
+  return { sx, sy, dh };
 }
 
 // ================================================================
@@ -206,17 +220,25 @@ function mainLoop(now) {
   let palmScreenX = 0;
   let palmScreenY = 0;
   if (hand.found) {
-    const { sx, sy } = videoToScreen(hand.cx, hand.cy);
+    const { sx, sy, dh } = videoToScreen(hand.cx, hand.cy);
     palmScreenX = sx / window.innerWidth;    // 画面の割合(0.0〜1.0)にする
     palmScreenY = sy / window.innerHeight;
 
     const worldPos = arScene.screenToWorld(sx, sy);
 
-    // 手の大きさ(カメラへの近さ)から、昆虫の表示サイズを決める
-    // 0.11 は「標準的な距離での手の大きさ」のめやす
-    const palmScale = THREE.MathUtils.clamp(hand.size / 0.11, 0.5, 2.0);
+    // --- 実寸表示のための計算 ---
+    // 画面に写った手のひらの大きさ(ピクセル)を測り、
+    // 「実物の手のひらは約9cm」という仮定から
+    // 「実寸1メートル = 3D空間で何単位か」(metersToWorld)を求める。
+    // これが定規の代わりになって、昆虫が実物大で表示される
+    const palmSizePx = hand.size * dh;                          // 手の大きさ(ピクセル)
+    const palmWorldSize = palmSizePx * arScene.worldUnitsPerPixel();  // → 3D空間の単位
+    const metersToWorld = THREE.MathUtils.clamp(
+      palmWorldSize / PALM_REAL_SIZE_M,
+      1, 40   // 極端な値にならないように制限(手の誤検出対策)
+    );
 
-    arScene.setPalm(worldPos, palmScale);
+    arScene.setPalm(worldPos, metersToWorld);
     lostTime = 0;
   } else {
     lostTime += dt;
@@ -273,6 +295,9 @@ function mainLoop(now) {
         // 手を振ったかチェック(サプライズ機能!)
         if (checkShake(palmScreenX, palmScreenY, now)) {
           arScene.startThrow(getThrowVelocity());
+          // 効果音を最初から鳴らす
+          throwSound.currentTime = 0;
+          throwSound.play().catch(() => { /* 音が鳴らせなくても続行 */ });
           setState("thrown");
         }
       } else if (lostTime > LOST_GRACE) {
