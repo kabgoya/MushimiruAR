@@ -103,6 +103,49 @@ html, body {
 }
 
 /* ================================================================
+   写真をとるシャッターボタン(画面の下の真ん中)
+   ================================================================ */
+#shutter-button {
+  position: fixed;
+  bottom: calc(20px + env(safe-area-inset-bottom));  /* ホームバーと重ならないように */
+  left: 50%;
+  transform: translateX(-50%);       /* 真ん中ぞろえ */
+  z-index: 10;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  font-size: 28px;
+  cursor: pointer;
+}
+
+#shutter-button:active {
+  transform: translateX(-50%) scale(0.9);   /* 押したときに少しへこむ */
+}
+
+#shutter-button[hidden] {
+  display: none;
+}
+
+/* シャッターの白い光(ふだんは透明。撮影の瞬間だけ光る) */
+#flash {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;              /* タッチ操作を邪魔しない */
+  transition: opacity 0.3s ease;
+}
+
+#flash.active {
+  opacity: 0.8;
+  transition: none;                  /* 光るときは一瞬で */
+}
+
+/* ================================================================
    はじめの説明ウィンドウ(モーダル)
    ================================================================ */
 #intro-modal {
