@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <!-- スマホで正しく表示するための設定(拡大縮小を禁止して全画面で使う) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ムシミルAR - てのひらに むしさんが やってくる!</title>
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- ================================================================
+       importmap : 「three」という短い名前で Three.js(3D表示ライブラリ)を
+       インターネット(CDN)から読み込めるようにする設定です。
+       バージョンを変えたいときは下の数字(0.160.0)を書き換えます。
+       ================================================================ -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+
+  <!-- ============================================
+       カメラの映像を映す場所(画面いっぱいに表示)
+       autoplay / muted / playsinline は
+       スマホで自動再生するためのおまじないです
+       ============================================ -->
+  <video id="camera-video" autoplay muted playsinline></video>
+
+  <!-- 3D(魔法陣・昆虫)を描く透明なキャンバス。カメラ映像の上に重ねます -->
+  <canvas id="ar-canvas"></canvas>
+
+  <!-- ============================================
+       カメラ切り替えトグルスイッチ(そとカメラ ⇔ じぶんカメラ)
+       ============================================ -->
+  <label id="camera-toggle" title="カメラをきりかえる">
+    <input type="checkbox" id="camera-toggle-checkbox">
+    <span class="toggle-track">
+      <span class="toggle-icon">📷</span>
+      <span class="toggle-icon">🤳</span>
+      <span class="toggle-knob"></span>
+    </span>
+  </label>
+
+  <!-- ============================================
+       はじめに表示する「あそびかた」の説明ウィンドウ
+       (※手を振る機能はサプライズなので書いていません)
+       ============================================ -->
+  <div id="intro-modal">
+    <div class="intro-card">
+      <h1>🐞 ムシミルAR 🐞</h1>
+      <div class="intro-steps">
+        <p><span class="step-emoji">🖐️</span> てのひらを ひらいて<br>カメラに みせてね</p>
+        <p><span class="step-emoji">✨</span> まほうじんが でてくるよ</p>
+        <p><span class="step-emoji">🐛</span> むしさんが てのひらに<br>あそびに くるよ!</p>
+      </div>
+      <button id="start-button">はじめる!</button>
+      <p class="intro-note">カメラをつかいます。「きょか」をおしてね</p>
+    </div>
+  </div>
+
+  <!-- 準備中(ライブラリ読み込み中)に表示するくるくる -->
+  <div id="loading-overlay" hidden>
+    <div class="spinner"></div>
+    <p>まほうの じゅんびちゅう…</p>
+  </div>
+
+  <!-- エラーが起きたときに表示するメッセージ -->
+  <div id="error-overlay" hidden>
+    <p id="error-message"></p>
+  </div>
+
+  <!-- アプリ本体のプログラムを読み込む(type="module" が必要) -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

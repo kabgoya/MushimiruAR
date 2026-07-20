@@ -1,0 +1,7 @@
+{
+  "_説明": "昆虫の3Dモデルを差し替えるための設定ファイルです。くわしくは README.md を見てください",
+  "file": "insect.glb",
+  "scale": 1.0,
+  "rotationY": 0,
+  "offsetY": 0
+}
